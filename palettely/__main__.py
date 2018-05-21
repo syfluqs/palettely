@@ -1,17 +1,50 @@
+'''
+
+_|_|_|              _|              _|      _|                _|            
+_|    _|    _|_|_|  _|    _|_|    _|_|_|_|_|_|_|_|    _|_|    _|  _|    _|  
+_|_|_|    _|    _|  _|  _|_|_|_|    _|      _|      _|_|_|_|  _|  _|    _|  
+_|        _|    _|  _|  _|          _|      _|      _|        _|  _|    _|  
+_|          _|_|_|  _|    _|_|_|      _|_|    _|_|    _|_|_|  _|    _|_|_|  
+                                                                        _|  
+                                                                    _|_| 
+
+'''
+
 import numpy as np
 from PIL import Image
 import colorsys
 from collections import deque
-from termcolor import termcolor
-from color_wheel import color_wheel
-from color_wheel import color
+from .termcolor import termcolor
+from .color_wheel import color_wheel
+from .color_wheel import color
 import os
 
-'''
-http://www.aishack.in/tutorials/dominant-color/
-'''
-
 class palette_generator:
+    ''' Palette Generator Class
+    
+    Generates a palette of dominant colors for the image provided. The number of
+    colors in the output can be specified and the subsampling size. Time-complexity
+    is O(log(m)*(n^2)) where n=subsampling-size and m=number of output colors.
+    The algorithm is known as Spectral Clustering. The algorithm used is 
+    descirbed at http://www.aishack.in/tutorials/dominant-color/. Advantage of 
+    this algorithm over k-means clustering is that the output is deterministic, 
+    while in k-means, it depends on the initial guess.
+
+    Usage example:
+    file = "~/image.jpg"                                        # image filename
+    p = palette_generator(45)                                   # 45 color output
+    p.generate(file,top=20,sortby="eye_catching",verbose=True)  # generate and 
+                                                                # return top 20 
+                                                                # colors sorted 
+                                                                # eye-catching 
+                                                                # (bright colors 
+                                                                # neglecting pure 
+                                                                # whites, blacks
+                                                                # and grays) 
+                                                                # colors first
+    # Generate palette for all image files in the home directory
+    p.generate_from_dir("~",top=20,sortby="eye_catching",verbose=True)
+    '''
     classes = None
     im = None
     im_ = None
@@ -141,7 +174,7 @@ class palette_generator:
             palette.sort(key=lambda tup:color.metric.normalized_value(*tup), reverse=True)
         elif (sortby=='saturation+value'):
             palette.sort(key=lambda tup:1-color.metric.normalized_saturation(*tup)+color.metric.normalized_value(*tup), reverse=True)
-        elif (sortby=='standard_deviation' or sortby=='distance_from_gray'):
+        elif (sortby=='standard_deviation' or sortby=='distance_from_gray' or sortby=='eye_catching'):
             palette.sort(key=lambda tup:1-color.metric.standard_deviation(*tup))
         elif (sortby=='nearest_to'):
             if type(option)!=tuple and len(option)!=3:
@@ -149,7 +182,7 @@ class palette_generator:
             palette.sort(key=lambda tup:1-color.metric.color_distance(*tup,*option), reverse=True)
         return palette
 
-    def generate(self, img_path, sortby="area", option=None):
+    def generate(self, img_path, sortby="area", option=None, top=None, verbose=False):
         if (not os.path.isfile(img_path)):
             raise Exception("Image file not found")
             return
@@ -177,9 +210,18 @@ class palette_generator:
         palette_generator.im_ = None
         palette_generator.tree_root = None
 
+        if top!=None and top<=len(tmp) and top>=0:
+            tmp = tmp[0:top]
+
+        if verbose:
+            print(os.path.basename(img_path))
+            for i in tmp:
+                print(termcolor.rgb_box(i,max(int(termcolor.get_term_size()[1])//len(tmp),1)),end="")
+            print()
+
         return tmp
 
-    def generate_from_dir(self, dir_path=".", sortby="area", option=None):
+    def generate_from_dir(self, dir_path=".", sortby="area", option=None, top=None, verbose=False):
         if not os.path.isdir(dir_path):
             raise Exception("Directory not found")
             return
@@ -187,22 +229,13 @@ class palette_generator:
         for f in os.listdir(dir_path):
             f_ = f.lower()
             if (f_.endswith(".jpg") or f_.endswith(".jpeg") or f_.endswith(".png")):
-                ret.append((self.generate(dir_path+"/"+f,sortby,option),f))
+                tmp = self.generate(dir_path+"/"+f,sortby,option)
+                if top!=None and top<=len(tmp[0]) and top>=0:
+                    tmp[0] = tmp[0][0:top]
+                ret.append((tmp,f))
+                if verbose:
+                    print(os.path.basename(f))
+                    for i in ret[-1][0]:
+                        print(termcolor.rgb_box(i,max(int(termcolor.get_term_size()[1])//len(tmp),1)),end="")
+                    print()
         return ret
-
-if __name__ == '__main__':
-    p = palette_generator()
-    for j in p.generate_from_dir(sortby="standard_deviation"):
-        line1 = []
-        line2 = []
-        line3 = []
-        for i in j[0]:
-            line1.append(termcolor.rgb_box(i,4))
-            tmp = color_wheel.triadic(*i)
-            line2.append(termcolor.rgb_box(tmp[0],4))
-            line3.append(termcolor.rgb_box(tmp[1],4))
-
-        print(j[1])
-        print("".join(line1))
-        # print("".join(line2))
-        # print("".join(line3))
